@@ -31,6 +31,8 @@ void ChangetoDnsNameFormat (unsigned char*,unsigned char*);
 unsigned char* ReadName (unsigned char*,unsigned char*,int*);
 void get_dns_servers();
 
+void receiv_and_print_info(int s, struct sockaddr_in* dest);
+
 //DNS header structure
 struct DNS_HEADER
 {
@@ -87,12 +89,16 @@ typedef struct
     struct QUESTION *ques;
 } QUERY;
 
+bool already_get_dns = false;
+
 int resolver_host(std::string hosts)
 {
     unsigned char hostname[256];
 
-    //Get the DNS servers from the resolv.conf file
-    get_dns_servers();
+    if (!already_get_dns) {
+        get_dns_servers();
+        already_get_dns = true;
+    }
 
     long length = hosts.size();
     memcpy(hostname, hosts.data(), length);
@@ -109,12 +115,10 @@ int resolver_host(std::string hosts)
  * */
 void ngethostbyname(unsigned char *host , int query_type)
 {
-    unsigned char buf[65536],*qname,*reader;
-    int i , j , stop , s;
+    unsigned char buf[65536],*qname;
+    int s;
 
-    struct sockaddr_in a;
 
-    struct RES_RECORD answers[20],auth[20],addit[20]; //the replies from the DNS server
     struct sockaddr_in dest;
 
     struct DNS_HEADER *dns = NULL;
@@ -164,15 +168,28 @@ void ngethostbyname(unsigned char *host , int query_type)
     printf("Done");
 
     //Receive the answer
-    i = sizeof dest;
+    receiv_and_print_info(s, &dest);
+}
+
+void receiv_and_print_info(int s, struct sockaddr_in* dest) {
+
+    unsigned char buf[65536],*qname,*reader;;
+    struct DNS_HEADER *dns = NULL;
+    struct RES_RECORD answers[20],auth[20],addit[20]; //the replies from the DNS server
+    struct sockaddr_in a;
+    int i,j;
+
+    i = sizeof (*dest);
     printf("\nReceiving answer...");
-    if(recvfrom (s,(char*)buf , 65536 , 0 , (struct sockaddr*)&dest , (socklen_t*)&i ) < 0)
+    if(recvfrom (s,(char*)buf , 65536 , 0 , (struct sockaddr*)dest , (socklen_t*)&i ) < 0)
     {
         perror("recvfrom failed");
     }
     printf("Done");
 
     dns = (struct DNS_HEADER*) buf;
+    //point to the query portion
+    qname =(unsigned char*)&buf[sizeof(struct DNS_HEADER)];
 
     //move ahead of the dns header and the query field
     reader = &buf[sizeof(struct DNS_HEADER) + (strlen((const char*)qname)+1) + sizeof(struct QUESTION)];
@@ -184,7 +201,7 @@ void ngethostbyname(unsigned char *host , int query_type)
     printf("\n %d Additional records.\n\n",ntohs(dns->add_count));
 
     //Start reading answers
-    stop=0;
+    int stop=0;
 
     for(i=0;i<ntohs(dns->ans_count);i++)
     {
@@ -367,29 +384,6 @@ u_char* ReadName(unsigned char* reader,unsigned char* buffer,int* count)
  * */
 void get_dns_servers()
 {
-    FILE *fp;
-    char line[200] , *p;
-    if((fp = fopen("/etc/resolv.conf" , "r")) == NULL)
-    {
-        printf("Failed opening /etc/resolv.conf file \n");
-    }
-
-    while(fgets(line , 200 , fp))
-    {
-        if(line[0] == '#')
-        {
-            continue;
-        }
-        if(strncmp(line , "nameserver" , 10) == 0)
-        {
-            p = strtok(line , " ");
-            p = strtok(NULL , " ");
-
-            //p now is the dns ip :)
-            //????
-        }
-    }
-
     strcpy(dns_servers[0] , "208.67.222.222");
     strcpy(dns_servers[1] , "208.67.220.220");
 }

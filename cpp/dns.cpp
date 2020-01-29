@@ -10,8 +10,10 @@
 #include<arpa/inet.h> //inet_addr , inet_ntoa , ntohs etc
 #include<netinet/in.h>
 #include<unistd.h>    //getpid
+#include <fcntl.h>
 
 #include "dns.h"
+#include "kqueue.h"
 
 //List of DNS Servers registered on the system
 char dns_servers[10][100];
@@ -30,8 +32,6 @@ void ngethostbyname (unsigned char* , int);
 void ChangetoDnsNameFormat (unsigned char*,unsigned char*);
 unsigned char* ReadName (unsigned char*,unsigned char*,int*);
 void get_dns_servers();
-
-void receiv_and_print_info(int s, struct sockaddr_in* dest);
 
 //DNS header structure
 struct DNS_HEADER
@@ -128,6 +128,8 @@ void ngethostbyname(unsigned char *host , int query_type)
 
     s = socket(AF_INET , SOCK_DGRAM , IPPROTO_UDP); //UDP packet for DNS queries
 
+
+
     dest.sin_family = AF_INET;
     dest.sin_port = htons(53);
     dest.sin_addr.s_addr = inet_addr(dns_servers[0]); //dns servers
@@ -167,25 +169,21 @@ void ngethostbyname(unsigned char *host , int query_type)
     }
     printf("Done");
 
+    add_to_kqueue(s);
+
     //Receive the answer
-    receiv_and_print_info(s, &dest);
+    //receiv_and_print_info(s, &dest);
 }
 
-void receiv_and_print_info(int s, struct sockaddr_in* dest) {
+void receiv_and_print_info(unsigned char* buf) {
 
-    unsigned char buf[65536],*qname,*reader;;
+    unsigned char *qname,*reader;;
     struct DNS_HEADER *dns = NULL;
     struct RES_RECORD answers[20],auth[20],addit[20]; //the replies from the DNS server
     struct sockaddr_in a;
     int i,j;
 
-    i = sizeof (*dest);
-    printf("\nReceiving answer...");
-    if(recvfrom (s,(char*)buf , 65536 , 0 , (struct sockaddr*)dest , (socklen_t*)&i ) < 0)
-    {
-        perror("recvfrom failed");
-    }
-    printf("Done");
+
 
     dns = (struct DNS_HEADER*) buf;
     //point to the query portion
@@ -231,43 +229,6 @@ void receiv_and_print_info(int s, struct sockaddr_in* dest) {
         }
     }
 
-    //read authorities
-    for(i=0;i<ntohs(dns->auth_count);i++)
-    {
-        auth[i].name=ReadName(reader,buf,&stop);
-        reader+=stop;
-
-        auth[i].resource=(struct R_DATA*)(reader);
-        reader+=sizeof(struct R_DATA);
-
-        auth[i].rdata=ReadName(reader,buf,&stop);
-        reader+=stop;
-    }
-
-    //read additional
-    for(i=0;i<ntohs(dns->add_count);i++)
-    {
-        addit[i].name=ReadName(reader,buf,&stop);
-        reader+=stop;
-
-        addit[i].resource=(struct R_DATA*)(reader);
-        reader+=sizeof(struct R_DATA);
-
-        if(ntohs(addit[i].resource->type)==1)
-        {
-            addit[i].rdata = (unsigned char*)malloc(ntohs(addit[i].resource->data_len));
-            for(j=0;j<ntohs(addit[i].resource->data_len);j++)
-                addit[i].rdata[j]=reader[j];
-
-            addit[i].rdata[ntohs(addit[i].resource->data_len)]='\0';
-            reader+=ntohs(addit[i].resource->data_len);
-        }
-        else
-        {
-            addit[i].rdata=ReadName(reader,buf,&stop);
-            reader+=stop;
-        }
-    }
 
     //print answers
     printf("\nAnswer Records : %d \n" , ntohs(dns->ans_count) );
@@ -292,33 +253,7 @@ void receiv_and_print_info(int s, struct sockaddr_in* dest) {
         printf("\n");
     }
 
-    //print authorities
-    printf("\nAuthoritive Records : %d \n" , ntohs(dns->auth_count) );
-    for( i=0 ; i < ntohs(dns->auth_count) ; i++)
-    {
 
-        printf("Name : %s ",auth[i].name);
-        if(ntohs(auth[i].resource->type)==2)
-        {
-            printf("has nameserver : %s",auth[i].rdata);
-        }
-        printf("\n");
-    }
-
-    //print additional resource records
-    printf("\nAdditional Records : %d \n" , ntohs(dns->add_count) );
-    for(i=0; i < ntohs(dns->add_count) ; i++)
-    {
-        printf("Name : %s ",addit[i].name);
-        if(ntohs(addit[i].resource->type)==1)
-        {
-            long *p;
-            p=(long*)addit[i].rdata;
-            a.sin_addr.s_addr=(*p);
-            printf("has IPv4 address : %s",inet_ntoa(a.sin_addr));
-        }
-        printf("\n");
-    }
     return;
 }
 

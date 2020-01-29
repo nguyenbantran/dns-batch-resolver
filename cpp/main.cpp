@@ -13,13 +13,20 @@ int main() {
 
     dns_create_kqueue();
 
-    resolver_host("facebook.com");
 
-    return 0;
+    int count = 0;
 
     while(file >> lineContent) {
         std::cout << lineContent << std::endl;
+        resolver_host(lineContent);
+        count++;
+        if (count == 5) {
+            break;
+        }
     }
+
+    process_all_event();
+
 
     return 0;
 }

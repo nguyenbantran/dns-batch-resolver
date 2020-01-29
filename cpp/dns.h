@@ -10,4 +10,6 @@
 
 int resolver_host(std::string hosts);
 
+void receiv_and_print_info(unsigned char* buf);
+
 #endif //CPP_DNS_H

@@ -87,16 +87,16 @@ typedef struct
     struct QUESTION *ques;
 } QUERY;
 
-int main_c()
+int resolver_host(std::string hosts)
 {
     unsigned char hostname[256];
 
     //Get the DNS servers from the resolv.conf file
     get_dns_servers();
 
-    //Get the hostname from the terminal
-    printf("Enter Hostname to Lookup : ");
-    scanf("%s" , hostname);
+    long length = hosts.size();
+    memcpy(hostname, hosts.data(), length);
+    hostname[length] = 0;
 
     //Now get the ip of this hostname , A record
     ngethostbyname(hostname , T_A);

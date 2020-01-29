@@ -5,6 +5,9 @@
 #ifndef CPP_DNS_H
 #define CPP_DNS_H
 
-int main_c();
+#include <string>
+
+
+int resolver_host(std::string hosts);
 
 #endif //CPP_DNS_H

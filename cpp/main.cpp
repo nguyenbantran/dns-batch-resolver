@@ -10,7 +10,9 @@ int main() {
     std::ifstream file("../dns.txt");
     std::string lineContent;
 
-    main_c();
+    resolver_host("facebook.com");
+
+    return 0;
 
     while(file >> lineContent) {
         std::cout << lineContent << std::endl;

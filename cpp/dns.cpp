@@ -15,8 +15,10 @@
 #include "dns.h"
 #include "kqueue.h"
 
+#include <map>
+
 //List of DNS Servers registered on the system
-char dns_servers[10][100];
+char dns_servers[20][100];
 int dns_server_count = 0;
 //Types of DNS resource records :)
 
@@ -124,15 +126,13 @@ void ngethostbyname(unsigned char *host , int query_type)
     struct DNS_HEADER *dns = NULL;
     struct QUESTION *qinfo = NULL;
 
-    printf("Resolving %s" , host);
+   // printf("Resolving %s" , host);
 
     s = socket(AF_INET , SOCK_DGRAM , IPPROTO_UDP); //UDP packet for DNS queries
 
-
-
     dest.sin_family = AF_INET;
     dest.sin_port = htons(53);
-    dest.sin_addr.s_addr = inet_addr(dns_servers[0]); //dns servers
+    dest.sin_addr.s_addr = inet_addr(dns_servers[rand()  % 12]); //dns servers
 
     //Set the DNS structure to standard queries
     dns = (struct DNS_HEADER *)&buf;
@@ -162,18 +162,17 @@ void ngethostbyname(unsigned char *host , int query_type)
     qinfo->qtype = htons( query_type ); //type of the query , A , MX , CNAME , NS etc
     qinfo->qclass = htons(1); //its internet (lol)
 
-    printf("\nSending Packet...");
+
     if( sendto(s,(char*)buf,sizeof(struct DNS_HEADER) + (strlen((const char*)qname)+1) + sizeof(struct QUESTION),0,(struct sockaddr*)&dest,sizeof(dest)) < 0)
     {
         perror("sendto failed");
     }
-    printf("Done");
 
     add_to_kqueue(s);
-
-    //Receive the answer
-    //receiv_and_print_info(s, &dest);
 }
+
+int print_order = 0;
+std::map<std::string, int> mapOfWords;
 
 void receiv_and_print_info(unsigned char* buf) {
 
@@ -189,14 +188,30 @@ void receiv_and_print_info(unsigned char* buf) {
     //point to the query portion
     qname =(unsigned char*)&buf[sizeof(struct DNS_HEADER)];
 
+    int start_query = 0;
+    unsigned char* query = ReadName(qname, qname, &start_query);
+    std::string s_query((char*) query);
+
+    if (mapOfWords.find(s_query) == mapOfWords.cend()) {
+        return;
+    }
+
+
+    if (mapOfWords[s_query] == 3) {
+        return;
+    }
+
     //move ahead of the dns header and the query field
     reader = &buf[sizeof(struct DNS_HEADER) + (strlen((const char*)qname)+1) + sizeof(struct QUESTION)];
 
-    printf("\nThe response contains : ");
-    printf("\n %d Questions.",ntohs(dns->q_count));
-    printf("\n %d Answers.",ntohs(dns->ans_count));
-    printf("\n %d Authoritative Servers.",ntohs(dns->auth_count));
-    printf("\n %d Additional records.\n\n",ntohs(dns->add_count));
+    if (0) {
+        printf("\nThe response contains : ");
+        printf("\n %d Questions.",ntohs(dns->q_count));
+        printf("\n %d Answers.",ntohs(dns->ans_count));
+        printf("\n %d Authoritative Servers.",ntohs(dns->auth_count));
+        printf("\n %d Additional records.\n\n",ntohs(dns->add_count));
+    }
+
 
     //Start reading answers
     int stop=0;
@@ -230,24 +245,37 @@ void receiv_and_print_info(unsigned char* buf) {
     }
 
 
+    print_order++;
     //print answers
-    printf("\nAnswer Records : %d \n" , ntohs(dns->ans_count) );
+    if (ntohs(dns->ans_count) == 0) {
+        printf("Name %04d %s Answer Records : %d \n" , print_order, query, ntohs(dns->ans_count) );
+
+    }
+    mapOfWords[s_query] = 3;
+
     for(i=0 ; i < ntohs(dns->ans_count) ; i++)
     {
-        printf("Name : %s ",answers[i].name);
+        printf("Name %04d: %s ",print_order, answers[i].name);
 
         if( ntohs(answers[i].resource->type) == T_A) //IPv4 address
         {
             long *p;
             p=(long*)answers[i].rdata;
             a.sin_addr.s_addr=(*p); //working without ntohl
-            printf("has IPv4 address : %s",inet_ntoa(a.sin_addr));
+            printf("has IPv4 address : %s\n",inet_ntoa(a.sin_addr));
+
+            std::string s((char*)answers[i].name);
+            mapOfWords[s] = 3;
+
+            return;
         }
 
         if(ntohs(answers[i].resource->type)==5)
         {
             //Canonical name for an alias
             printf("has alias name : %s",answers[i].rdata);
+            std::string s((char*)answers[i].name);
+            mapOfWords[s] = 3;
         }
 
         printf("\n");
@@ -319,8 +347,18 @@ u_char* ReadName(unsigned char* reader,unsigned char* buffer,int* count)
  * */
 void get_dns_servers()
 {
-    strcpy(dns_servers[0] , "208.67.222.222");
+    strcpy(dns_servers[0] , "1.1.1.1");
     strcpy(dns_servers[1] , "208.67.220.220");
+    strcpy(dns_servers[2] , "8.8.8.8");
+    strcpy(dns_servers[3] , "8.8.4.4");
+    strcpy(dns_servers[4] , "9.9.9.9");
+    strcpy(dns_servers[5] , "149.112.112.112");
+    strcpy(dns_servers[6] , "208.67.222.222");
+    strcpy(dns_servers[7] , "1.0.0.1");
+    strcpy(dns_servers[8] , "64.6.64.6");
+    strcpy(dns_servers[9] , "64.6.65.6");
+    strcpy(dns_servers[10] , "176.103.130.130");
+    strcpy(dns_servers[11] , "176.103.130.131");
 }
 
 /*

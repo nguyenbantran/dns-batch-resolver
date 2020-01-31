@@ -20,16 +20,19 @@
 #include <errno.h>
 
 #include <iostream>
+#include <map>
 
 
 static int kq;
 static int input = 0;
 
+
+
 int dns_create_kqueue() {
 
     kq = kqueue();
 
-    std::cout << kq << std::endl;
+    //std::cout << kq << std::endl;
 
     return 0;
 }
@@ -45,11 +48,13 @@ void add_to_kqueue(int s) {
     // Listen on the new socket
     EV_SET(&evSet, s, EVFILT_READ, EV_ADD, 0, 0, NULL);
     kevent(kq, &evSet, 1, NULL, 0, NULL);
-    printf("\nGot connection: %d\n", input);
+    //printf("Got connection: %d -- %d\n", input, s);
     input++;
 }
 
 int count = 0;
+
+int total_event = 0;
 
 void process_all_event() {
 
@@ -57,10 +62,15 @@ void process_all_event() {
     while (1) {
         // returns number of events
         int nev = kevent(kq, NULL, 0, evList, 32, NULL);
-//        printf("kqueue got %d events\n", nev);
+        total_event += nev;
+
+       // printf("kqueue got %d events of total: %d\n", nev, total_event);
+
 
         for (int i = 0; i < nev; i++) {
             int fd = (int)evList[i].ident;
+
+            //printf("Event of: %d\n", fd);
 
             if (evList[i].flags & EV_EOF) {
                 printf("Disconnect\n");
@@ -68,21 +78,28 @@ void process_all_event() {
                 // Socket is automatically removed from the kq by the kernel.
             }  else if (evList[i].filter == EVFILT_READ) {
                 // Read from socket.
-                char buf[1024];
+                char buf[2048];
                 size_t bytes_read = recv(fd, buf, sizeof(buf), 0);
-                printf("read %zu bytes\n", bytes_read);
 
+                //printf("read %zu bytes\n", bytes_read);
+
+
+                close(fd);
                 receiv_and_print_info((unsigned char*) buf);
+
                 count ++;
                 if (count == input) {
                     return;
                 }
 
 
+
             } else if (evList[i].filter == EVFILT_WRITE) {
-//                printf("Ok to write more!\n");
+                               // printf("Ok to write more!\n");
 
 
+            } else {
+                printf("some thing else \n");
             }
         }
     }
